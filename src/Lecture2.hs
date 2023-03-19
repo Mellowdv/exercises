@@ -54,8 +54,8 @@ zero, you can stop calculating product and return 0 immediately.
 lazyProduct :: [Int] -> Int
 lazyProduct list = case list of
     (0 : _) -> 0
-    [num] -> num
-    _ -> head list * lazyProduct (tail list)
+    x : xs -> x * lazyProduct xs 
+    _ -> 1
 
 {- | Implement a function that duplicates every element in the list.
 
@@ -66,8 +66,8 @@ lazyProduct list = case list of
 -}
 duplicate :: [a] -> [a]
 duplicate list = case list of
-     [var] -> [var, var]
-     _ -> head list : head list : duplicate (tail list)
+    x : xs -> x : x : duplicate xs
+    _ -> []
 
 {- | Implement function that takes index and a list and removes the
 element at the given position. Additionally, this function should also
@@ -86,7 +86,7 @@ removeAt index list = (removedElement, restOfTheList)
         endOfTheList = drop (index + 1) list
         removedElement
             | null startOfTheList = Nothing
-            | index > length list = Nothing
+            | index >= length startOfTheList = Nothing
             | otherwise = Just (last startOfTheList)
         restOfTheList = take index startOfTheList ++ endOfTheList
 

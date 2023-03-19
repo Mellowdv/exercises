@@ -30,7 +30,6 @@ module Lecture1
     , strSum
     , lowerAndGreater
     ) where
-import GHC.RTS.Flags (GCFlags(compact))
 
 -- VVV If you need to import libraries, do it after this line ... VVV
 
@@ -138,12 +137,12 @@ and lower than 6 elements (4, 5, 6, 7, 8 and 9).
 🕯 HINT: Use recursion to implement this function.
 -}
 lowerAndGreater :: Int -> [Int] -> [Char]
-lowerAndGreater n list = show n ++ " is greater than " ++ show (head counts) ++ " elements and lower than " ++ show (last counts) ++ " elements"
+lowerAndGreater n list = show n ++ " is greater than " ++ show (fst counts) ++ " elements and lower than " ++ show (snd counts) ++ " elements"
     where
-        go :: [Int] -> [Int] -> [Int]
-        go result l
-            | null l = result
-            | n > head l = go [succ (head result), last result] (tail l)
-            | n < head l = go [head result, succ (last result)] (tail l)
-            | otherwise = go result (tail l)
-        counts = go [0, 0] list
+        go :: Int -> Int -> [Int] -> (Int, Int)
+        go greaterCount lowerCount l
+            | null l = (greaterCount, lowerCount)
+            | n > head l = go (succ greaterCount) lowerCount (tail l)
+            | n < head l = go greaterCount (succ lowerCount) (tail l)
+            | otherwise = go greaterCount lowerCount (tail l)
+        counts = go 0 0 list
