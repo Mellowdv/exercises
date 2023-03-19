@@ -39,6 +39,7 @@ module Lecture2
     , eval
     , constantFolding
     ) where
+import Data.Char (isAlphaNum)
 
 -- VVV If you need to import libraries, do it after this line ... VVV
 
@@ -99,7 +100,8 @@ lists of even lengths.
 ♫ NOTE: Use eta-reduction and function composition (the dot (.) operator)
   in this function.
 -}
-evenLists = error "TODO"
+evenLists :: [[a]] -> [[a]]
+evenLists = filter (even . length)
 
 {- | The @dropSpaces@ function takes a string containing a single word
 or number surrounded by spaces and removes all leading and trailing
@@ -115,7 +117,8 @@ spaces.
 
 🕯 HINT: look into Data.Char and Prelude modules for functions you may use.
 -}
-dropSpaces = error "TODO"
+dropSpaces :: [Char] -> [Char]
+dropSpaces = words
 
 {- |
 
