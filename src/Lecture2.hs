@@ -38,9 +38,9 @@ module Lecture2
     , EvalError (..)
     , eval
     , constantFolding
+    , test
     ) where
-import Data.Char (isAlphaNum)
-
+import Data.Char (isSpace)
 -- VVV If you need to import libraries, do it after this line ... VVV
 
 -- ^^^ and before this line. Otherwise the test suite might fail  ^^^
@@ -55,7 +55,7 @@ zero, you can stop calculating product and return 0 immediately.
 lazyProduct :: [Int] -> Int
 lazyProduct list = case list of
     (0 : _) -> 0
-    x : xs -> x * lazyProduct xs 
+    x : xs -> x * lazyProduct xs
     _ -> 1
 
 {- | Implement a function that duplicates every element in the list.
@@ -118,8 +118,7 @@ spaces.
 🕯 HINT: look into Data.Char and Prelude modules for functions you may use.
 -}
 dropSpaces :: [Char] -> [Char]
-dropSpaces = words
-
+dropSpaces = takeWhile (not . isSpace) . dropWhile isSpace
 {- |
 
 The next task requires to create several data types and functions to
@@ -181,7 +180,60 @@ data Knight = Knight
     , knightEndurance :: Int
     }
 
-dragonFight = error "TODO"
+data DragonColor
+    = Red
+    | Black
+    | Green
+
+data Chest a = Chest
+    { goldAmount :: Int,
+      treasure :: Maybe a
+    }
+
+data Dragon = Dragon
+    { dragonHealth :: Int,
+      dragonAttack :: Int,
+      dragonColor :: DragonColor
+    }
+
+data Result
+    = KnightWon
+    | KnightDied
+    | KnightRanAway
+
+showResult :: Result -> String
+showResult reflection = case reflection of
+    KnightWon -> "Knight won!"
+    KnightDied -> "Knight died!"
+    KnightRanAway -> "Knight ran away!"
+
+damageDragon :: Dragon -> Int -> Dragon
+damageDragon dragon damage = dragon {dragonHealth = dragonHealth dragon - damage}
+
+damageKnight :: Knight -> Int -> Knight
+damageKnight knight damage = knight {knightHealth = knightHealth knight - damage, knightEndurance = knightEndurance knight - 1}
+
+dragonFight :: Knight -> Dragon -> (Result, [Int])
+dragonFight knight dragon = result
+    where
+        go :: Int -> Knight -> Dragon -> (Result, [Int])
+        go numberOfAttacks k d
+            | knightHealth k <= 0 = (KnightDied, [numberOfAttacks, dragonHealth d])
+            | dragonHealth d <= 0 = (KnightWon, [numberOfAttacks, dragonHealth d])
+            | knightEndurance k <= 0 = (KnightRanAway, [numberOfAttacks, dragonHealth d])
+            | mod numberOfAttacks 10 == 0 = go (numberOfAttacks + 1) (damageKnight k (dragonAttack d)) (damageDragon d (knightAttack k))
+            | otherwise = go (numberOfAttacks + 1) (damageKnight k 0) (damageDragon d (knightAttack k))
+        result = go 1 knight dragon
+
+blackDragon :: Dragon
+blackDragon = Dragon {dragonHealth=300, dragonAttack=30, dragonColor=Black}
+scrubbyKnight :: Knight
+scrubbyKnight = Knight {knightHealth=25, knightAttack=30, knightEndurance=11}
+
+test :: IO()
+test_result :: (Result, [Int])
+test_result = dragonFight scrubbyKnight blackDragon
+test = do putStrLn (showResult (fst test_result) ++ show (snd test_result))
 
 ----------------------------------------------------------------------------
 -- Extra Challenges
