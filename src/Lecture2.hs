@@ -41,6 +41,7 @@ module Lecture2
     , test
     ) where
 import Data.Char (isSpace)
+import Control.Arrow (Arrow(first, second))
 -- VVV If you need to import libraries, do it after this line ... VVV
 
 -- ^^^ and before this line. Otherwise the test suite might fail  ^^^
@@ -185,10 +186,21 @@ data DragonColor
     | Black
     | Green
 
+data Treasure
+    = Sword
+    | Armor
+    deriving (Show)
+
+showTreasure :: Treasure -> String
+showTreasure t = case t of
+    Sword -> "Sword"
+    Armor -> "Armor"
+
 data Chest a = Chest
     { goldAmount :: Int,
       treasure :: Maybe a
     }
+    deriving (Show)
 
 data Dragon = Dragon
     { dragonHealth :: Int,
@@ -200,6 +212,9 @@ data Result
     = KnightWon
     | KnightDied
     | KnightRanAway
+
+type Experience = Int
+type Loot = (Chest Treasure, Experience)
 
 showResult :: Result -> String
 showResult reflection = case reflection of
@@ -213,8 +228,8 @@ damageDragon dragon damage = dragon {dragonHealth = dragonHealth dragon - damage
 damageKnight :: Knight -> Int -> Knight
 damageKnight knight damage = knight {knightHealth = knightHealth knight - damage, knightEndurance = knightEndurance knight - 1}
 
-dragonFight :: Knight -> Dragon -> (Result, [Int])
-dragonFight knight dragon = result
+dragonFight :: Knight -> Dragon -> ((Result,  [Int]), Maybe Loot)
+dragonFight knight dragon = (result, reward)
     where
         go :: Int -> Knight -> Dragon -> (Result, [Int])
         go numberOfAttacks k d
@@ -223,17 +238,27 @@ dragonFight knight dragon = result
             | knightEndurance k <= 0 = (KnightRanAway, [numberOfAttacks, dragonHealth d])
             | mod numberOfAttacks 10 == 0 = go (numberOfAttacks + 1) (damageKnight k (dragonAttack d)) (damageDragon d (knightAttack k))
             | otherwise = go (numberOfAttacks + 1) (damageKnight k 0) (damageDragon d (knightAttack k))
-        result = go 1 knight dragon
 
+        determineReward :: Result -> Dragon -> Maybe Loot
+        determineReward r d = case r of
+            KnightWon -> case dragonColor d of
+                Red -> Just (Chest {goldAmount=150, treasure=Just Armor}, 100)
+                Black -> Just (Chest {goldAmount=200, treasure=Just Sword}, 150)
+                Green -> Just (Chest {goldAmount=250, treasure=Nothing}, 250)
+            _ -> Nothing
+        result = go 1 knight dragon
+        reward = determineReward (fst result) dragon
+
+{- Test run of the dragon fight function, some of the implementation is just debugging/logging but it seems to work -}
 blackDragon :: Dragon
-blackDragon = Dragon {dragonHealth=300, dragonAttack=30, dragonColor=Black}
+blackDragon = Dragon {dragonHealth=300, dragonAttack=10, dragonColor=Green}
 scrubbyKnight :: Knight
 scrubbyKnight = Knight {knightHealth=25, knightAttack=30, knightEndurance=11}
 
 test :: IO()
-test_result :: (Result, [Int])
+test_result :: ((Result, [Int]), Maybe Loot)
 test_result = dragonFight scrubbyKnight blackDragon
-test = do putStrLn (showResult (fst test_result) ++ show (snd test_result))
+test = do putStrLn (showResult (fst (fst test_result)) ++ show (snd (fst test_result)) ++ show (snd test_result))
 
 ----------------------------------------------------------------------------
 -- Extra Challenges
@@ -254,7 +279,10 @@ False
 True
 -}
 isIncreasing :: [Int] -> Bool
-isIncreasing = error "TODO"
+isIncreasing list = case list of
+    [x, y] -> x < y
+    (x : y : zs) -> (x < y) && isIncreasing (y : zs)
+    _ -> True
 
 {- | Implement a function that takes two lists, sorted in the
 increasing order, and merges them into new list, also sorted in the
@@ -267,7 +295,12 @@ verify that.
 [1,2,3,4,7]
 -}
 merge :: [Int] -> [Int] -> [Int]
-merge = error "TODO"
+merge firstList secondList = case (firstList, secondList) of
+    ([], y) -> y
+    (x, []) -> x
+    (x : xs, y : ys) -> if x < y
+                        then x : merge xs (y : ys)
+                        else y : merge (x : xs) ys
 
 {- | Implement the "Merge Sort" algorithm in Haskell. The @mergeSort@
 function takes a list of numbers and returns a new list containing the
@@ -284,7 +317,10 @@ The algorithm of merge sort is the following:
 [1,2,3]
 -}
 mergeSort :: [Int] -> [Int]
-mergeSort = error "TODO"
+mergeSort list = case list of
+    [] -> []
+    (x : xs) -> list
+    _ -> list
 
 
 {- | Haskell is famous for being a superb language for implementing
