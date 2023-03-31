@@ -41,7 +41,6 @@ module Lecture2
     , test
     ) where
 import Data.Char (isSpace)
-import Control.Arrow (Arrow(first, second))
 -- VVV If you need to import libraries, do it after this line ... VVV
 
 -- ^^^ and before this line. Otherwise the test suite might fail  ^^^
@@ -191,11 +190,6 @@ data Treasure
     | Armor
     deriving (Show)
 
-showTreasure :: Treasure -> String
-showTreasure t = case t of
-    Sword -> "Sword"
-    Armor -> "Armor"
-
 data Chest a = Chest
     { goldAmount :: Int,
       treasure :: Maybe a
@@ -318,10 +312,11 @@ The algorithm of merge sort is the following:
 -}
 mergeSort :: [Int] -> [Int]
 mergeSort list = case list of
+    [x] -> [x]
     [] -> []
-    (x : xs) -> list
-    _ -> list
-
+    _ -> sortedList where
+        splitList = splitAt (div (length list) 2) list
+        sortedList = merge (mergeSort (fst splitList)) (mergeSort (snd splitList))
 
 {- | Haskell is famous for being a superb language for implementing
 compilers and interpreters to other programming languages. In the next
@@ -373,7 +368,16 @@ data EvalError
 It returns either a successful evaluation result or an error.
 -}
 eval :: Variables -> Expr -> Either EvalError Int
-eval = error "TODO"
+eval vars expr = case expr of
+    Lit x -> Right x
+    Var x -> case lookup x vars of
+        Just var -> Right var
+        Nothing -> Left (VariableNotFound x)
+    Add lhs rhs -> case (eval vars lhs, eval vars rhs) of
+        (Left (VariableNotFound a), _) -> Left (VariableNotFound a)
+        (_, Left (VariableNotFound b)) -> Left (VariableNotFound b)
+        (Right a, Right b) -> Right (a + b)
+
 
 {- | Compilers also perform optimizations! One of the most common
 optimizations is "Constant Folding". It performs arithmetic operations
@@ -391,10 +395,41 @@ x + y + 45
 
 It also can be:
 
-x + 45 + y
+x + 45 + y 
 
 Write a function that takes and expression and performs "Constant
 Folding" optimization on the given expression.
 -}
 constantFolding :: Expr -> Expr
-constantFolding = error "TODO"
+constantFolding expr = case expr of
+    Lit x -> Lit x
+    Var x -> Var x
+    Add lhs rhs -> result where
+        go :: Expr -> Maybe Expr -> Int -> (Maybe Expr, Int)
+        go expression variables constant = case expression of
+            Add x y -> processedExpressions where
+                resultX = go x variables constant
+                processedExpressions = go y (fst resultX) (snd resultX)
+            Var x -> case variables of
+                Nothing -> (Just (Var x), constant)
+                Just (Var a) -> (Just (Add (Var x) (Var a)), constant)
+                Just (Lit a) -> (variables, constant + a)
+                Just (Add a b) -> (Just (Add (Add a b) (Var x)), constant)
+            Lit x -> (variables, constant + x)
+
+        (lhsVars, lhsConstant) = go lhs Nothing 0
+        (rhsVars, rhsConstant) = go rhs Nothing 0
+        variablesToBeReturned = case (lhsVars, rhsVars) of
+            (Nothing, Nothing) -> Nothing
+            (Nothing, a) -> a
+            (a, Nothing) -> a
+            (Just a, Just b) -> Just (Add a b)
+
+        constantToBeReturned = lhsConstant + rhsConstant
+        result = case (variablesToBeReturned, constantToBeReturned) of
+            (Nothing, b) -> Lit b
+            (Just a, 0) -> a
+            (Just a, b) -> Add a (Lit b)
+
+{- This function is kind of ugly and big, not sure how to make it better. :(
+ - -}
