@@ -38,8 +38,9 @@ module Lecture2
     , EvalError (..)
     , eval
     , constantFolding
+    , test
     ) where
-
+import Data.Char (isSpace)
 -- VVV If you need to import libraries, do it after this line ... VVV
 
 -- ^^^ and before this line. Otherwise the test suite might fail  ^^^
@@ -54,7 +55,7 @@ zero, you can stop calculating product and return 0 immediately.
 lazyProduct :: [Int] -> Int
 lazyProduct list = case list of
     (0 : _) -> 0
-    x : xs -> x * lazyProduct xs 
+    x : xs -> x * lazyProduct xs
     _ -> 1
 
 {- | Implement a function that duplicates every element in the list.
@@ -99,7 +100,8 @@ lists of even lengths.
 ♫ NOTE: Use eta-reduction and function composition (the dot (.) operator)
   in this function.
 -}
-evenLists = error "TODO"
+evenLists :: [[a]] -> [[a]]
+evenLists = filter (even . length)
 
 {- | The @dropSpaces@ function takes a string containing a single word
 or number surrounded by spaces and removes all leading and trailing
@@ -115,8 +117,8 @@ spaces.
 
 🕯 HINT: look into Data.Char and Prelude modules for functions you may use.
 -}
-dropSpaces = error "TODO"
-
+dropSpaces :: [Char] -> [Char]
+dropSpaces = takeWhile (not . isSpace) . dropWhile isSpace
 {- |
 
 The next task requires to create several data types and functions to
@@ -178,7 +180,79 @@ data Knight = Knight
     , knightEndurance :: Int
     }
 
-dragonFight = error "TODO"
+data DragonColor
+    = Red
+    | Black
+    | Green
+
+data Treasure
+    = Sword
+    | Armor
+    deriving (Show)
+
+data Chest a = Chest
+    { goldAmount :: Int,
+      treasure :: Maybe a
+    }
+    deriving (Show)
+
+data Dragon = Dragon
+    { dragonHealth :: Int,
+      dragonAttack :: Int,
+      dragonColor :: DragonColor
+    }
+
+data Result
+    = KnightWon
+    | KnightDied
+    | KnightRanAway
+
+type Experience = Int
+type Loot = (Chest Treasure, Experience)
+
+showResult :: Result -> String
+showResult reflection = case reflection of
+    KnightWon -> "Knight won!"
+    KnightDied -> "Knight died!"
+    KnightRanAway -> "Knight ran away!"
+
+damageDragon :: Dragon -> Int -> Dragon
+damageDragon dragon damage = dragon {dragonHealth = dragonHealth dragon - damage}
+
+damageKnight :: Knight -> Int -> Knight
+damageKnight knight damage = knight {knightHealth = knightHealth knight - damage, knightEndurance = knightEndurance knight - 1}
+
+dragonFight :: Knight -> Dragon -> ((Result,  [Int]), Maybe Loot)
+dragonFight knight dragon = (result, reward)
+    where
+        go :: Int -> Knight -> Dragon -> (Result, [Int])
+        go numberOfAttacks k d
+            | knightHealth k <= 0 = (KnightDied, [numberOfAttacks, dragonHealth d])
+            | dragonHealth d <= 0 = (KnightWon, [numberOfAttacks, dragonHealth d])
+            | knightEndurance k <= 0 = (KnightRanAway, [numberOfAttacks, dragonHealth d])
+            | mod numberOfAttacks 10 == 0 = go (numberOfAttacks + 1) (damageKnight k (dragonAttack d)) (damageDragon d (knightAttack k))
+            | otherwise = go (numberOfAttacks + 1) (damageKnight k 0) (damageDragon d (knightAttack k))
+
+        determineReward :: Result -> Dragon -> Maybe Loot
+        determineReward r d = case r of
+            KnightWon -> case dragonColor d of
+                Red -> Just (Chest {goldAmount=150, treasure=Just Armor}, 100)
+                Black -> Just (Chest {goldAmount=200, treasure=Just Sword}, 150)
+                Green -> Just (Chest {goldAmount=250, treasure=Nothing}, 250)
+            _ -> Nothing
+        result = go 1 knight dragon
+        reward = determineReward (fst result) dragon
+
+{- Test run of the dragon fight function, some of the implementation is just debugging/logging but it seems to work -}
+blackDragon :: Dragon
+blackDragon = Dragon {dragonHealth=300, dragonAttack=10, dragonColor=Green}
+scrubbyKnight :: Knight
+scrubbyKnight = Knight {knightHealth=25, knightAttack=30, knightEndurance=11}
+
+test :: IO()
+test_result :: ((Result, [Int]), Maybe Loot)
+test_result = dragonFight scrubbyKnight blackDragon
+test = do putStrLn (showResult (fst (fst test_result)) ++ show (snd (fst test_result)) ++ show (snd test_result))
 
 ----------------------------------------------------------------------------
 -- Extra Challenges
@@ -199,7 +273,10 @@ False
 True
 -}
 isIncreasing :: [Int] -> Bool
-isIncreasing = error "TODO"
+isIncreasing list = case list of
+    [x, y] -> x < y
+    (x : y : zs) -> (x < y) && isIncreasing (y : zs)
+    _ -> True
 
 {- | Implement a function that takes two lists, sorted in the
 increasing order, and merges them into new list, also sorted in the
@@ -212,7 +289,12 @@ verify that.
 [1,2,3,4,7]
 -}
 merge :: [Int] -> [Int] -> [Int]
-merge = error "TODO"
+merge firstList secondList = case (firstList, secondList) of
+    ([], y) -> y
+    (x, []) -> x
+    (x : xs, y : ys) -> if x < y
+                        then x : merge xs (y : ys)
+                        else y : merge (x : xs) ys
 
 {- | Implement the "Merge Sort" algorithm in Haskell. The @mergeSort@
 function takes a list of numbers and returns a new list containing the
@@ -229,8 +311,12 @@ The algorithm of merge sort is the following:
 [1,2,3]
 -}
 mergeSort :: [Int] -> [Int]
-mergeSort = error "TODO"
-
+mergeSort list = case list of
+    [x] -> [x]
+    [] -> []
+    _ -> sortedList where
+        splitList = splitAt (div (length list) 2) list
+        sortedList = merge (mergeSort (fst splitList)) (mergeSort (snd splitList))
 
 {- | Haskell is famous for being a superb language for implementing
 compilers and interpreters to other programming languages. In the next
@@ -282,7 +368,16 @@ data EvalError
 It returns either a successful evaluation result or an error.
 -}
 eval :: Variables -> Expr -> Either EvalError Int
-eval = error "TODO"
+eval vars expr = case expr of
+    Lit x -> Right x
+    Var x -> case lookup x vars of
+        Just var -> Right var
+        Nothing -> Left (VariableNotFound x)
+    Add lhs rhs -> case (eval vars lhs, eval vars rhs) of
+        (Left (VariableNotFound a), _) -> Left (VariableNotFound a)
+        (_, Left (VariableNotFound b)) -> Left (VariableNotFound b)
+        (Right a, Right b) -> Right (a + b)
+
 
 {- | Compilers also perform optimizations! One of the most common
 optimizations is "Constant Folding". It performs arithmetic operations
@@ -300,10 +395,41 @@ x + y + 45
 
 It also can be:
 
-x + 45 + y
+x + 45 + y 
 
 Write a function that takes and expression and performs "Constant
 Folding" optimization on the given expression.
 -}
 constantFolding :: Expr -> Expr
-constantFolding = error "TODO"
+constantFolding expr = case expr of
+    Lit x -> Lit x
+    Var x -> Var x
+    Add lhs rhs -> result where
+        go :: Expr -> Maybe Expr -> Int -> (Maybe Expr, Int)
+        go expression variables constant = case expression of
+            Add x y -> processedExpressions where
+                resultX = go x variables constant
+                processedExpressions = go y (fst resultX) (snd resultX)
+            Var x -> case variables of
+                Nothing -> (Just (Var x), constant)
+                Just (Var a) -> (Just (Add (Var x) (Var a)), constant)
+                Just (Lit a) -> (variables, constant + a)
+                Just (Add a b) -> (Just (Add (Add a b) (Var x)), constant)
+            Lit x -> (variables, constant + x)
+
+        (lhsVars, lhsConstant) = go lhs Nothing 0
+        (rhsVars, rhsConstant) = go rhs Nothing 0
+        variablesToBeReturned = case (lhsVars, rhsVars) of
+            (Nothing, Nothing) -> Nothing
+            (Nothing, a) -> a
+            (a, Nothing) -> a
+            (Just a, Just b) -> Just (Add a b)
+
+        constantToBeReturned = lhsConstant + rhsConstant
+        result = case (variablesToBeReturned, constantToBeReturned) of
+            (Nothing, b) -> Lit b
+            (Just a, 0) -> a
+            (Just a, b) -> Add a (Lit b)
+
+{- This function is kind of ugly and big, not sure how to make it better. :(
+ - -}
