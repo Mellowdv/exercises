@@ -274,7 +274,6 @@ True
 -}
 isIncreasing :: [Int] -> Bool
 isIncreasing list = case list of
-    [x, y] -> x < y
     (x : y : zs) -> (x < y) && isIncreasing (y : zs)
     _ -> True
 
