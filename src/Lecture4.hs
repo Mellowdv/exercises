@@ -133,6 +133,20 @@ errors. We will simply return an optional result here.
 
 🕯 HINT: Use the 'readMaybe' function from the 'Text.Read' module.
 -}
+tokenize :: Char -> String -> [String]
+tokenize delim string = listOfTokens
+    where  
+    go :: String -> String -> Char -> (String, String)
+    go token str delimiter = case str of
+        (x : xs) -> if x == delimiter
+                    then (token, xs)
+                    else go (token ++ [x]) xs delimiter
+        [] -> (token, [])
+        
+    parsedResult = go [] string delim
+    parsedToken = fst parsedResult
+    stringRemainder = snd parsedResult
+    listOfTokens = parsedToken : tokenize delim stringRemainder 
 
 parseRow :: String -> Maybe Row
 parseRow = error "TODO"
