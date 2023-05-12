@@ -80,7 +80,8 @@ errors. You can just ignore invalid rows.
 
 Exercises for Lecture 4 also contain tests and you can run them as usual.
 -}
-
+{-# LANGUAGE StrictData #-}
+{-# LANGUAGE BangPatterns #-}
 module Lecture4
     ( -- * Main running function
       main
@@ -100,9 +101,13 @@ module Lecture4
     , printProductStats
     ) where
 
-import Data.List.NonEmpty (NonEmpty (..))
-import Data.Semigroup (Max (..), Min (..), Semigroup (..), Sum (..))
+import Data.List.NonEmpty (NonEmpty (..), fromList)
+import Data.Semigroup (Max (..), Min (..), Sum (..))
+import Data.Char (isSpace)
+import Data.Maybe (fromMaybe, fromJust, mapMaybe)
 import Text.Read (readMaybe)
+import System.Environment (getArgs)
+import Data.Foldable (foldl')
 
 {- In this exercise, instead of writing the entire program from
 scratch, you're offered to complete the missing parts.
@@ -133,23 +138,56 @@ errors. We will simply return an optional result here.
 
 🕯 HINT: Use the 'readMaybe' function from the 'Text.Read' module.
 -}
+dropWhitespace :: [Char] -> [Char]
+dropWhitespace = takeWhile (not . isSpace) . dropWhile isSpace
+
 tokenize :: Char -> String -> [String]
-tokenize delim string = listOfTokens
-    where  
+tokenize delim string = case string of
+    "" -> []
+    _ -> listOfTokens
+    where
     go :: String -> String -> Char -> (String, String)
     go token str delimiter = case str of
         (x : xs) -> if x == delimiter
                     then (token, xs)
                     else go (token ++ [x]) xs delimiter
         [] -> (token, [])
-        
+
     parsedResult = go [] string delim
     parsedToken = fst parsedResult
     stringRemainder = snd parsedResult
-    listOfTokens = parsedToken : tokenize delim stringRemainder 
+    listOfTokens = parsedToken : tokenize delim stringRemainder
 
+toTradeType :: String -> Maybe TradeType
+toTradeType word = case dropWhitespace word of
+    "Buy" -> Just Buy
+    "Sell" -> Just Sell
+    _ -> Nothing
+
+isNatural :: Double -> Bool
+isNatural x = (x == fromInteger (round x)) && x >= 0
+
+toInt :: String -> Maybe Int
+toInt word = if isNatural (fromMaybe (-1) (readMaybe word)) then Just (read word) else Nothing
+
+{- This function is really awkward and ugly, but I have no idea how to make it neater :( 
+ - I can't really see how the andThen, maybePlus, Monad refactoring could be done here. 
+ - I could just extract the pattern matching to a separate function but that only moves 
+ - the ugly bits 5 lines up. -}
 parseRow :: String -> Maybe Row
-parseRow = error "TODO"
+parseRow row = parsedRow where
+    tokens = tokenize ',' row
+    parsedRow = case tokens of
+        [x, y, z] -> case x of
+            "" -> Nothing
+            _ -> case toTradeType y of
+                Nothing -> Nothing
+                _ -> case toInt z of
+                    Nothing -> Nothing
+                    _ -> Just Row {rowProduct=x, rowTradeType=fromJust (toTradeType y), rowCost=fromJust (toInt z)}
+        _ -> Nothing
+
+
 
 {-
 We have almost all we need to calculate final stats in a simple and
@@ -171,7 +209,10 @@ string.
 If both strings have the same length, return the first one.
 -}
 instance Semigroup MaxLen where
-
+    (<>) :: MaxLen -> MaxLen -> MaxLen
+    x <> y = if length (unMaxLen x) < length (unMaxLen y)
+             then y
+             else x
 
 {-
 It's convenient to represent our stats as a data type that has
@@ -197,8 +238,33 @@ The 'Stats' data type has multiple fields. All these fields have
 instance for the 'Stats' type itself.
 -}
 
-instance Semigroup Stats where
+evaluate :: Semigroup a => Maybe a -> Maybe a -> Maybe a
+evaluate x y = evaluated
+    where
+        accumulated = x <> y
+        evaluated = case accumulated of
+            Nothing -> Nothing
+            Just !z -> Just z
 
+instance Semigroup Stats where
+    (<>) :: Stats -> Stats -> Stats
+    (Stats totalPos1 totalSum1 absMax1 absMin1 sellMax1 sellMin1 buyMax1 buyMin1 longest1)
+        <> (Stats totalPos2 totalSum2 absMax2 absMin2 sellMax2 sellMin2 buyMax2 buyMin2 longest2) =
+            evaluatedStats where
+
+            !evaluatedSellMax = evaluate sellMax1 sellMax2
+            !evaluatedSellMin = evaluate sellMin1 sellMin2
+            !evaluatedBuyMax = evaluate buyMax1 buyMax2
+            !evaluatedBuyMin = evaluate buyMin1 buyMin2
+            evaluatedStats = Stats {statsTotalPositions=totalPos1 <> totalPos2,
+                   statsTotalSum=totalSum1 <> totalSum2,
+                   statsAbsoluteMax=absMax1 <> absMax2,
+                   statsAbsoluteMin=absMin1 <> absMin2,
+                   statsSellMax=evaluatedSellMax,
+                   statsSellMin=evaluatedSellMin,
+                   statsBuyMax=evaluatedBuyMax,
+                   statsBuyMin=evaluatedBuyMin,
+                   statsLongest=longest1 <> longest2}
 
 {-
 The reason for having the 'Stats' data type is to be able to convert
@@ -214,7 +280,28 @@ row in the file.
 -}
 
 rowToStats :: Row -> Stats
-rowToStats = error "TODO"
+rowToStats row = case row of
+    Row name Buy amount -> Stats {statsTotalPositions=Sum 1,
+                                  statsTotalSum=Sum (-amount),
+                                  statsAbsoluteMax=Max amount,
+                                  statsAbsoluteMin=Min amount,
+                                  statsSellMax=Nothing,
+                                  statsSellMin=Nothing,
+                                  statsBuyMax=Just (Max amount),
+                                  statsBuyMin=Just (Min amount),
+                                  statsLongest=MaxLen name}
+    Row name Sell amount -> Stats {statsTotalPositions=Sum 1,
+                                   statsTotalSum=Sum amount,
+                                   statsAbsoluteMax=Max amount,
+                                   statsAbsoluteMin=Min amount,
+                                   statsSellMax=Just (Max amount),
+                                   statsSellMin=Just (Min amount),
+                                   statsBuyMax=Nothing,
+                                   statsBuyMin=Nothing,
+                                   statsLongest=MaxLen name}
+
+
+
 
 {-
 Now, after we learned to convert a single row, we can convert a list of rows!
@@ -240,18 +327,49 @@ implement the next task.
 -}
 
 combineRows :: NonEmpty Row -> Stats
-combineRows = error "TODO"
+combineRows rows = case rows of
+    x :| [] -> rowToStats x
+    (x :| xs) -> foldl' (<>) (rowToStats x) (Prelude.map rowToStats xs)
 
 {-
 After we've calculated stats for all rows, we can then pretty-print
 our final result.
 
+    let stringStats =
+            [ "Total positions        : 3"
+            , "Total final balance    : -15"
+            , "Biggest absolute cost  : 50"
+            , "Smallest absolute cost : 10"
+            , "Max earning            : 25"
+            , "Min earning            : 10"
+            , "Max spending           : 50"
+            , "Min spending           : 50"
+            , "Longest product name   : Pineapples"
+            ]
 If there's no value for a field (for example, there were not "Buy" products),
 you can return string "no value".
 -}
 
+
+
 displayStats :: Stats -> String
-displayStats = error "TODO"
+displayStats stats = "Total positions        : " <> show (getSum (statsTotalPositions stats))
+                    <> "\nTotal final balance    : " <> show (getSum (statsTotalSum stats))
+                    <> "\nBiggest absolute cost  : " <> show (getMax (statsAbsoluteMax stats))
+                    <> "\nSmallest absolute cost : " <> show (getMin (statsAbsoluteMin stats))
+                    <> "\nMax earning            : " <> case statsBuyMax stats of
+                                                        Nothing -> "no value"
+                                                        _ -> show (getMax (fromJust (statsSellMax stats)))
+                    <> "\nMin earning            : " <> case statsBuyMin stats of
+                                                        Nothing -> "no value"
+                                                        _ -> show (getMin (fromJust (statsSellMin stats)))
+                    <> "\nMax spending           : " <> case statsSellMax stats of
+                                                        Nothing -> "no value"
+                                                        _ -> show (getMax (fromJust (statsBuyMax stats)))
+                    <> "\nMin spending           : " <> case statsSellMin stats of
+                                                        Nothing -> "no value"
+                                                        _ -> show (getMin (fromJust (statsBuyMin stats)))
+                    <> "\nLongest product name   : " <> unMaxLen (statsLongest stats)
 
 {-
 Now, we definitely have all the pieces in places! We can write a
@@ -271,7 +389,12 @@ the file doesn't have any products.
 -}
 
 calculateStats :: String -> String
-calculateStats = error "TODO"
+calculateStats inputString = outputString where
+    listOfLines = lines inputString
+    parsedRows = mapMaybe parseRow listOfLines
+    outputString = case parsedRows of 
+        [] -> "file doesn't have any products"
+        _ -> (displayStats . combineRows . fromList) parsedRows
 
 {- The only thing left is to write a function with side-effects that
 takes a path to a file, reads its content, calculates stats and prints
@@ -281,7 +404,9 @@ Use functions 'readFile' and 'putStrLn' here.
 -}
 
 printProductStats :: FilePath -> IO ()
-printProductStats = error "TODO"
+printProductStats path = do
+    fileContents <- readFile path
+    putStrLn (calculateStats fileContents)
 
 {-
 Okay, I lied. This is not the last thing. Now, we need to wrap
@@ -297,8 +422,11 @@ https://hackage.haskell.org/package/base-4.16.0.0/docs/System-Environment.html#v
 -}
 
 main :: IO ()
-main = error "TODO"
-
+main = do
+    args <- getArgs
+    if null args
+    then putStrLn "No arguments provided"
+    else printProductStats (last args)
 
 {-
 And that's all!
@@ -382,5 +510,30 @@ You can expect the optimal lazy solution to run in ~20 minutes and
 consume ~200 MB of RAM. The numbers are not the best and there's lots
 of room for optimization! But at least you've managed to implement a
 streaming solution using only basic Haskell 🤗
+
+Here are my best results so far:
+	Command being timed: "cabal run lecture4 -- test/gen/big.csv"
+	User time (seconds): 861.53
+	System time (seconds): 240.15
+	Percent of CPU this job got: 137%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 13:19.30
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 186496
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 588
+	Minor (reclaiming a frame) page faults: 115742
+	Voluntary context switches: 39929649
+	Involuntary context switches: 50429
+	Swaps: 0
+	File system inputs: 4416560
+	File system outputs: 17888
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
 
 -}
